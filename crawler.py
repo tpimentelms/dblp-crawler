@@ -4,6 +4,7 @@ import re
 from bs4 import BeautifulSoup, SoupStrainer
 import pickle
 import time
+import urllib2
 
 from utils import util, file_logger
 
@@ -185,6 +186,24 @@ def load_data(args):
         pass
 
 
+def run_crawler(depth):
+    crawl = True
+    while(crawl):
+        crawl = False
+        try:
+            crawl_links(depth)
+        except urllib2.HTTPError, err:
+            if err.code == 429:
+                crawl = True
+                time.sleep(5*60)
+                # header = err.hdrs()
+                # time = header.get('Retry-After')
+                # info = err.info()
+                # info.getheader('Retry-After')
+            else:
+                raise err
+
+
 def main(args):
     if args.log:
         file_logger.init('crawler__%s' % (str(time.time())))
@@ -193,7 +212,7 @@ def main(args):
         load_data(args)
 
     try:
-        crawl_links(int(args.depth))
+        run_crawler(int(args.depth))
     except Exception as e:
         print 'Error ocurred! Saving temp data'
         print e
