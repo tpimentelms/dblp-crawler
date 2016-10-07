@@ -75,13 +75,11 @@ def parse_author_page(br, page, name, depth):
         for i, link in enumerate(links):
             coauthor_id = link.url.split('/')[-1]
             
-            if coauthor_id in coauthors[author_id] and coauthor_id not in done:
+            if coauthor_id in coauthors[author_id] and coauthor_id not in done and coauthor_id not in authors:
                 links_to_visit += [(link, depth - 1)]
                 done.add(coauthor_id)
 
-            if i % 5:
-                print 'Processed %d coauthors of %d.' % (i, len(links))
-
+    # print '\t\tProcessed %d new coauthors.' % (len(done))
 
     authors.add(author_id)
     return author_id
@@ -119,18 +117,36 @@ def crawl_page(br, link, depth):
     return result
 
 
-def crawl_prolific_page(index, depth):
-    global completed, links_to_visit
+def get_prolific_links(depth):
+    global links_to_visit, links_visited
 
-    prolific_page = 'http://dblp.uni-trier.de/statistics/prolific%d' % index
-    print '\n\n--------------------------------------------------------'
-    print prolific_page
+    if len(links_to_visit) or len(links_visited):
+        return
+    
+    print 'Starting crawl. Getting all links for prolific pages'
+
+    prolific_page = 'http://dblp.uni-trier.de/statistics/prolific%d'
+    for index in range(1, 12):
+        br = mechanize.Browser()
+        br.open(prolific_page % index)
+
+        links_to_visit += [(x, depth) for x in br.links(url_regex="search\/author\?q\=")]
+
+
+def crawl_links(depth):
+    global completed, links_to_visit, links_visited
+
+    print '\n--------------------------------------------------------'
+    print 'Starting crawl'
     print '--------------------------------------------------------\n'
 
-    br = mechanize.Browser()
-    br.open(prolific_page)
+    get_prolific_links(depth)
 
-    links_to_visit += [(x, depth) for x in br.links(url_regex="search\/author\?q\=")]
+    # start_page = 'http://dblp.uni-trier.de/'
+
+    br = mechanize.Browser()
+    # br.open(prolific_page)
+
     util.start_print_progress(5, 'prolific links crawled', initial_count=len(links_visited))
 
     while links_to_visit:
@@ -143,7 +159,7 @@ def crawl_prolific_page(index, depth):
             continue
 
         crawl_page(br, link, depth)
-        print '\t\t', link.text, '\t', link.url
+        # print '\t\t', link.text, '\t', link.url
         completed.add(link.text)
         links_visited.add(link.url)
         links_to_visit.pop(0)
@@ -177,8 +193,7 @@ def main(args):
         load_data(args)
 
     try:
-        for index in range(1, 12):
-            crawl_prolific_page(index, int(args.depth))
+        crawl_links(int(args.depth))
     # except Exception as e:
     #     print 'Error ocurred! Saving temp data'
     #     print e
