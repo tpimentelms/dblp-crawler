@@ -3,8 +3,9 @@ import mechanize
 import re
 from bs4 import BeautifulSoup, SoupStrainer
 import pickle
+import time
 
-from utils import util
+from utils import util, file_logger
 
 def parse_args():
     '''
@@ -18,8 +19,8 @@ def parse_args():
     parser.add_argument('--restart', action='store_true',
                         help='Restart crawl. Don\'t use cached data.')
 
-    parser.add_argument('--verbose', dest='verbose', action='store_true',
-                        help='Stdout gensim info. Default is false. Only used if log-output is false.')
+    parser.add_argument('--log', action='store_true',
+                        help='Log stdout and stderr.')
 
     return parser.parse_args()
 
@@ -95,9 +96,9 @@ def crawl_prolific_page(index):
     global completed
 
     prolific_page = 'http://dblp.uni-trier.de/statistics/prolific%d' % index
-    print '--------------------------------------------------------'
+    print '\n\n--------------------------------------------------------'
     print prolific_page
-    print '--------------------------------------------------------'
+    print '--------------------------------------------------------\n'
 
     br = mechanize.Browser()
     br.open(prolific_page)
@@ -105,11 +106,11 @@ def crawl_prolific_page(index):
     links = [x for x in br.links(url_regex="search\/author\?q\=")]
     util.start_print_progress(5, len(links), 'prolific links crawled')
     for link in links:
+        util.print_progress()
         if link.text in completed:
             continue
 
         crawl_page(br, link)
-        util.print_progress()
         completed.add(link.text)
 
 
@@ -134,8 +135,8 @@ def load_data(args):
 
 
 def main(args):
-    if args.verbose:
-        print 'Verbose'
+    if args.log:
+        file_logger.init('crawler__%s' % (str(time.time())))
 
     if not args.restart:
         load_data(args)
@@ -150,6 +151,9 @@ def main(args):
         print '\n\nKeyboard interrupted. Saving progress.'
 
     save_data(args)
+
+    if args.log:
+        file_logger.close()
 
 
 if __name__ == '__main__':

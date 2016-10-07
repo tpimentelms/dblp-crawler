@@ -1,5 +1,4 @@
 import sys
-import logging
 
 orig_stdout = sys.stdout
 orig_stderr = sys.stderr
@@ -10,15 +9,11 @@ errfile = None
 buffer_size = 10
 
 
-def log_to_stdout():
-    logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
-
-
-def init_test(author):
+def init(name):
     global logfile, errfile
 
-    log_filename = 'results/%s__logs.txt' % (author)
-    err_filename = 'results/%s__err.txt' % (author)
+    log_filename = 'logs/%s__logs.txt' % (name)
+    err_filename = 'logs/%s__err.txt' % (name)
     logfile = file(log_filename, 'w', buffer_size)
     errfile = file(err_filename, 'w', buffer_size)
     sys.stdout = logfile

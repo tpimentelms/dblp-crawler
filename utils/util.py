@@ -26,10 +26,10 @@ def start_print_progress(interval, maxcount, typestr):
 
 
 def print_progress():
-    print_progress.count += 1
     if (print_progress.count % print_progress.interval) == 0 and print_progress.count != 0:
         print 'Processed %d %s of %d (Took: %lfs).' % (print_progress.count, print_progress.typestr, print_progress.maxcount, print_progress.timer.get_time())
         print_progress.timer = Timer()
+    print_progress.count += 1
 print_progress.count = 0
 print_progress.interval = 0
 print_progress.maxcount = 0
