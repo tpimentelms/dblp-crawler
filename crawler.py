@@ -13,6 +13,9 @@ def parse_args():
     '''
     parser = argparse.ArgumentParser(description="Get node embeddings.")
 
+    parser.add_argument('--depth', default=1,
+                        help='Crawl depth.')
+
     parser.add_argument('--output', default='dblp-data.pckl',
                         help='Output file.')
 
@@ -26,9 +29,13 @@ def parse_args():
 
 
 authors = set()
+authors_depth = {}
 coauthors = {}
 ambiguous = {}
 completed = set()
+
+links_visited = []
+links_to_visit = []
 
 
 # http://dblp.uni-trier.de/pers/hd/z/Zhang:Shao_Jie
@@ -43,11 +50,12 @@ def get_author_id_from_url(url):
     return m.groups()[0]
 
 
-def parse_author_page(page, name):
-    global coauthors, authors
+def parse_author_page(br, page, name, depth):
+    global coauthors, authors, links_to_visit
     author_id = get_author_id_from_url(page.geturl())
-    authors.add(author_id)
-    coauthors[author_id] = []
+    if author_id in authors:
+        return author_id
+    coauthors[author_id] = set()
 
     print '\tGetting author: %s' % (author_id)
 
@@ -59,24 +67,42 @@ def parse_author_page(page, name):
             coauthor_url = tag.a['href']
             coauthor_id = get_author_id_from_url(coauthor_url)
 
-            coauthors[author_id] += [coauthor_id]
+            link = 'http://dblp.uni-trier.de/pers/hd/d/Ding:Zhiguo'
+            coauthors[author_id].add(coauthor_id)
 
+    done = set()
+    if depth > 1:
+        links = [x for x in br.links(url_regex="pers\/hd\/")]
+
+        for i, link in enumerate(links):
+            coauthor_id = link.url.split('/')[-1]
+            
+            if coauthor_id in coauthors[author_id] and coauthor_id not in done:
+                links_to_visit += [(link, depth - 1)]
+                done.add(coauthor_id)
+
+            if i % 5:
+                print 'Processed %d coauthors of %d.' % (i, len(links))
+
+
+    authors.add(author_id)
     return author_id
 
 
-def parse_disambiguation_page(br, name):
+def parse_disambiguation_page(br, name, depth):
     global ambiguous
     print '\tDisambiguating: %s' % (name)
     ambiguous[name] = []
 
     for link in br.links(url_regex="pers\/hd\/"):
-        author_id = crawl_page(br, link)
+        author_id = crawl_page(br, link, depth)
+        links_to_visit += [(link, depth)]
         ambiguous[name] += [author_id]
 
     return None
 
 
-def crawl_page(br, link):
+def crawl_page(br, link, depth):
     page = br.follow_link(link)
 
     page_title = br.title()
@@ -84,15 +110,15 @@ def crawl_page(br, link):
 
     regex = 'dblp: Author search for '
     if re.match(regex, page_title):
-        result = parse_disambiguation_page(br, name)
+        result = parse_disambiguation_page(br, name, depth)
     else:
-        result = parse_author_page(page, name)
+        result = parse_author_page(br, page, name, depth)
 
     br.back()
     return result
 
 
-def crawl_prolific_page(index):
+def crawl_prolific_page(index, depth):
     global completed
 
     prolific_page = 'http://dblp.uni-trier.de/statistics/prolific%d' % index
@@ -110,7 +136,7 @@ def crawl_prolific_page(index):
         if link.text in completed:
             continue
 
-        crawl_page(br, link)
+        crawl_page(br, link, depth)
         completed.add(link.text)
 
 
@@ -143,10 +169,10 @@ def main(args):
 
     try:
         for index in range(1, 12):
-            crawl_prolific_page(index)
-    except Exception as e:
-        print 'Error ocurred! Saving temp data'
-        print e
+            crawl_prolific_page(index, int(args.depth))
+    # except Exception as e:
+    #     print 'Error ocurred! Saving temp data'
+    #     print e
     except KeyboardInterrupt:
         print '\n\nKeyboard interrupted. Saving progress.'
 
