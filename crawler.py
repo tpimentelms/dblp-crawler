@@ -194,9 +194,9 @@ def main(args):
 
     try:
         crawl_links(int(args.depth))
-    # except Exception as e:
-    #     print 'Error ocurred! Saving temp data'
-    #     print e
+    except Exception as e:
+        print 'Error ocurred! Saving temp data'
+        print e
     except KeyboardInterrupt:
         print '\n\nKeyboard interrupted. Saving progress.'
 
