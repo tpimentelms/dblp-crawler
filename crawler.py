@@ -136,16 +136,16 @@ def get_prolific_links(depth):
 def crawl_links(depth):
     global completed, links_to_visit, links_visited
 
-    print '\n--------------------------------------------------------'
+    print '\n-----------------------'
     print 'Starting crawl'
-    print '--------------------------------------------------------\n'
+    print '-----------------------\n'
 
     get_prolific_links(depth)
 
-    # start_page = 'http://dblp.uni-trier.de/'
+    start_page = 'http://dblp.uni-trier.de/'
 
     br = mechanize.Browser()
-    # br.open(prolific_page)
+    br.open(start_page  )
 
     util.start_print_progress(5, 'prolific links crawled', initial_count=len(links_visited))
 
