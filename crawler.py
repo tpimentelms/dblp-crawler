@@ -1,7 +1,7 @@
 import argparse
 import mechanize
 import re
-from BeautifulSoup import BeautifulSoup as bs
+from bs4 import BeautifulSoup, SoupStrainer
 
 
 def parse_args():
@@ -20,6 +20,8 @@ def parse_args():
 
 
 authors = set()
+coauthors = {}
+ambiguous = []
 
 
 # http://dblp.uni-trier.de/pers/hd/z/Zhang:Shao_Jie
@@ -34,15 +36,61 @@ def get_author_id_from_url(url):
     return m.groups()[0]
 
 
-def parse_author_page(page, name):
-    print '\tGetting author: %s' % (name)
-    print '\t\t%s' % get_author_id_from_url(page.geturl())
-    author = get_author_id_from_url(page.geturl())
-    if author in authors:
-        return
-    authors.add(get_author_id_from_url(page.geturl()))
+# <div class="data" itemprop="headline">
+#     <span itemprop="author" itemscope="" itemtype="http://schema.org/Person">
+#         <a href="http://dblp.uni-trier.de/pers/hd/l/Liu:Xinwang" itemprop="url">
+#             <span itemprop="name">Xinwang Liu
+#             </span>
+#         </a>
+#     </span>, 
+#     <span itemprop="author" itemscope="" itemtype="http://schema.org/Person">
+#         <span class="this-person" itemprop="name">Jianping Yin
+#         </span>
+#     </span>, 
+#     <span itemprop="author" itemscope="" itemtype="http://schema.org/Person">
+#         <a href="http://dblp.uni-trier.de/pers/hd/z/Zhang:Changwang" itemprop="url">
+#             <span itemprop="name">Changwang Zhang
+#             </span>
+#         </a>
+#     </span>:
+#     <br> 
+#     <span class="title" itemprop="name">A Max-Margin Learning Algorithm with Additional Features.
+#     </span> 
+#     <a href="http://dblp.uni-trier.de/db/conf/faw/faw2009.html#LiuYZZLZ09">
+#         <span itemprop="isPartOf" itemscope="" itemtype="http://schema.org/Series">
+#             <span itemprop="name">FAW
+#             </span>
+#         </span> 
+#         <span itemprop="datePublished">2009
+#         </span>
+#     </a>: 
+#     <span itemprop="pagination">196-206
+#     </span>
+# </div>
 
-    # soup = bs(page)
+def parse_author_page(page, name):
+    author_id = get_author_id_from_url(page.geturl())
+    if author_id in authors:
+        return
+    authors.add(author_id)
+    coauthors[author_id] = []
+    
+    print '\tGetting author: %s' % (author_id)
+
+    # strainer = SoupStrainer('div', attrs={'id': 'publ-section'})
+    # strainer = SoupStrainer('ul', attrs={'class': 'publ-list'})
+    strainer = SoupStrainer('div', attrs={'class': 'data', 'itemprop': 'headline'})
+    soup = BeautifulSoup(page, 'lxml', parse_only=strainer)
+
+    # for div in soup.find_all('div', {'class': 'data'}):
+    for tag in soup.find_all('span', {'itemprop': 'author'}):
+        if tag.a: # Author is not self
+            coauthor_url = tag.a['href']
+            coauthor_id = get_author_id_from_url(coauthor_url)
+
+            coauthors[author] += [coauthor_id]
+
+
 
 
 def parse_disambiguation_page(br, name):
@@ -53,10 +101,6 @@ def parse_disambiguation_page(br, name):
 
 
 def crawl_page(br, link):
-    # if link.url in crawl_page.crawled:
-    #     return
-    # crawl_page.crawled.add(link.url)
-
     page = br.follow_link(link)
 
     page_title = br.title()
@@ -69,7 +113,6 @@ def crawl_page(br, link):
         parse_author_page(page, name)
 
     br.back()
-# crawl_page.crawled = set()
 
 
 def crawl_prolific_page(index):
