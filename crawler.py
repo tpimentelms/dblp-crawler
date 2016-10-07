@@ -29,12 +29,10 @@ def parse_args():
 
 
 authors = set()
-authors_depth = {}
 coauthors = {}
 ambiguous = {}
 completed = set()
-
-links_visited = []
+links_visited = set()
 links_to_visit = []
 
 
@@ -57,7 +55,7 @@ def parse_author_page(br, page, name, depth):
         return author_id
     coauthors[author_id] = set()
 
-    print '\tGetting author: %s' % (author_id)
+    print '\tGetting author: %s (Depth: %d)' % (author_id, depth)
 
     strainer = SoupStrainer('div', attrs={'class': 'data', 'itemprop': 'headline'})
     soup = BeautifulSoup(page, 'lxml', parse_only=strainer)
@@ -90,14 +88,17 @@ def parse_author_page(br, page, name, depth):
 
 
 def parse_disambiguation_page(br, name, depth):
-    global ambiguous
+    global ambiguous, links_to_visit
     print '\tDisambiguating: %s' % (name)
     ambiguous[name] = []
+    ambiguous_links = []
 
     for link in br.links(url_regex="pers\/hd\/"):
-        author_id = crawl_page(br, link, depth)
-        links_to_visit += [(link, depth)]
+        author_id = get_author_id_from_url(link.url)
+        ambiguous_links += [(link, depth)]
         ambiguous[name] += [author_id]
+
+    links_to_visit = ambiguous_links + links_to_visit
 
     return None
 
@@ -119,7 +120,7 @@ def crawl_page(br, link, depth):
 
 
 def crawl_prolific_page(index, depth):
-    global completed
+    global completed, links_to_visit
 
     prolific_page = 'http://dblp.uni-trier.de/statistics/prolific%d' % index
     print '\n\n--------------------------------------------------------'
@@ -129,31 +130,39 @@ def crawl_prolific_page(index, depth):
     br = mechanize.Browser()
     br.open(prolific_page)
 
-    links = [x for x in br.links(url_regex="search\/author\?q\=")]
-    util.start_print_progress(5, len(links), 'prolific links crawled')
-    for link in links:
-        util.print_progress()
+    links_to_visit += [(x, depth) for x in br.links(url_regex="search\/author\?q\=")]
+    util.start_print_progress(5, 'prolific links crawled', initial_count=len(links_visited))
+
+    while links_to_visit:
+        util.print_progress(len(links_to_visit) + len(links_visited))
+
+        link, depth = links_to_visit[0]
+        if link.url in links_visited:
+            continue
         if link.text in completed:
             continue
 
         crawl_page(br, link, depth)
+        print '\t\t', link.text, '\t', link.url
         completed.add(link.text)
+        links_visited.add(link.url)
+        links_to_visit.pop(0)
 
 
 def save_data(args):
-    global coauthors, authors, ambiguous, completed
-    data = (coauthors, authors, ambiguous, completed)
+    global coauthors, authors, ambiguous, completed, links_to_visit, links_visited
+    data = (coauthors, authors, ambiguous, completed, links_to_visit, links_visited)
     with open(args.output, 'wb') as output:
         pickle.dump(data, output)
 
 
 def load_data(args):
-    global coauthors, authors, ambiguous, completed
+    global coauthors, authors, ambiguous, completed, links_to_visit, links_visited
 
     try:
         with open(args.output, 'rb') as input:
             data = pickle.load(input)
-        (coauthors, authors, ambiguous, completed) = data
+        (coauthors, authors, ambiguous, completed, links_to_visit, links_visited) = data
 
         print 'Loaded progress. Already completed:', completed
     except IOError:
