@@ -156,9 +156,11 @@ def crawl_links(depth):
         if link.url in links_visited:
             # links_visited.pop(0)
             print '\t\t\tErr1: ', link.url, link.text
+            import ipdb; ipdb.set_trace()
             continue
         if link.text in completed:
             print '\t\t\tErr2: ', link.url, link.text
+            import ipdb; ipdb.set_trace()
             continue
 
         crawl_page(br, link, depth)
