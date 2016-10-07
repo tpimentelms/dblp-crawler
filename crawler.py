@@ -155,7 +155,7 @@ def crawl_links(depth):
 
         link, depth = links_to_visit[0]
         if link.url in links_visited:
-            links_visited.pop(0)
+            links_to_visit.pop(0)
             # print '\t\t\t', link.url, link.text
             continue
 
