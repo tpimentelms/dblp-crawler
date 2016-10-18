@@ -8,6 +8,7 @@ import urllib2
 
 from utils import util, file_logger
 
+
 def parse_args():
     '''
     Parses the node2vec arguments.
@@ -37,6 +38,7 @@ def parse_args():
 
 authors = set()
 coauthors = {}
+papers = {}
 ambiguous = {}
 completed = set()
 links_visited = set()
@@ -56,23 +58,29 @@ def get_author_id_from_url(url):
 
 
 def parse_author_page(br, page, name, depth):
-    global coauthors, authors, links_to_visit
+    global coauthors, authors, papers, links_to_visit
     author_id = get_author_id_from_url(page.geturl())
     if author_id in authors:
         return author_id
     coauthors[author_id] = set()
+    papers[author_id] = []
 
     print '\tGetting author: %s (Depth: %d)' % (author_id, depth)
 
-    strainer = SoupStrainer('div', attrs={'class': 'data', 'itemprop': 'headline'})
+    strainer = SoupStrainer('ul', attrs={'class': 'publ-list'})
     soup = BeautifulSoup(page, 'lxml', parse_only=strainer)
 
-    for tag in soup.find_all('span', {'itemprop': 'author'}):
-        if tag.a: # Author is not self
-            coauthor_url = tag.a['href']
-            coauthor_id = get_author_id_from_url(coauthor_url)
+    for article in soup.find_all('li', {'itemtype': 'http://schema.org/ScholarlyArticle'}):
+        paper_coauthors = []
+        for tag in article.find_all('span', {'itemprop': 'author'}):
+            if tag.a:  # If author is not self.
+                coauthor_url = tag.a['href']
+                coauthor_id = get_author_id_from_url(coauthor_url)
 
-            coauthors[author_id].add(coauthor_id)
+                coauthors[author_id].add(coauthor_id)
+                paper_coauthors += [coauthor_id]
+
+        papers[author_id] += [paper_coauthors]
 
     done = set()
     if depth > 1:
@@ -80,7 +88,7 @@ def parse_author_page(br, page, name, depth):
 
         for i, link in enumerate(links):
             coauthor_id = link.url.split('/')[-1]
-            
+
             if coauthor_id in coauthors[author_id] and coauthor_id not in done and coauthor_id not in authors:
                 links_to_visit += [(link, depth - 1)]
                 done.add(coauthor_id)
@@ -102,7 +110,7 @@ def parse_disambiguation_page(br, name, depth):
         ambiguous_links += [(link, depth)]
         ambiguous[name] += [author_id]
 
-    links_to_visit = ambiguous_links + links_to_visit
+    links_to_visit = [links_to_visit[0]] + ambiguous_links + links_to_visit[1:]
 
     return None
 
@@ -128,12 +136,12 @@ def get_initial_links(depth, author_page=None):
 
     if len(links_to_visit) or len(links_visited):
         return
-    
+
     if not author_page:
         get_prolific_links(depth)
     else:
         print 'Starting crawl. Using author disambiguation page.'
-        author_link = mechanize._html.Link('la', author_page, 'Base Author', 'la','la')
+        author_link = mechanize._html.Link('la', author_page, 'Base Author', 'la', 'la')
         links_to_visit = [(author_link, depth)]
 
 
@@ -176,25 +184,25 @@ def crawl_links(depth, author_page=None):
 
         crawl_page(br, link, depth)
 
-        completed.add(link.text) # Remove?
+        completed.add(link.text)  # Remove?
         links_visited.add(link.url)
         links_to_visit.pop(0)
 
 
 def save_data(args):
-    global coauthors, authors, ambiguous, completed, links_to_visit, links_visited
-    data = (coauthors, authors, ambiguous, completed, links_to_visit, links_visited)
+    global coauthors, papers, authors, ambiguous, completed, links_to_visit, links_visited
+    data = (coauthors, papers, authors, ambiguous, completed, links_to_visit, links_visited)
     with open(args.output, 'wb') as output:
         pickle.dump(data, output)
 
 
 def load_data(args):
-    global coauthors, authors, ambiguous, completed, links_to_visit, links_visited
+    global coauthors, papers, authors, ambiguous, completed, links_to_visit, links_visited
 
     try:
         with open(args.output, 'rb') as input:
             data = pickle.load(input)
-        (coauthors, authors, ambiguous, completed, links_to_visit, links_visited) = data
+        (coauthors, papers, authors, ambiguous, completed, links_to_visit, links_visited) = data
 
         # print 'Loaded progress. Already completed:', completed
         print 'Loaded progress.'
@@ -211,18 +219,14 @@ def run_crawler(args):
         except urllib2.HTTPError, err:
             if err.code == 429:
                 crawl = True
-                time.sleep(5*60)
-                # header = err.hdrs()
-                # time = header.get('Retry-After')
-                # info = err.info()
-                # info.getheader('Retry-After')
+                time.sleep(5 * 60)
             else:
                 raise err
 
 
 def main(args):
     if args.log:
-	if args.author_page:
+        if args.author_page:
             file_logger.init('%s__crawler__%s' % (args.author, str(time.time())))
         else:
             file_logger.init('crawler__%s' % (str(time.time())))
