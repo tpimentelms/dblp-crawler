@@ -22,7 +22,7 @@ do
     echo ''; echo '';
     echo 'Getting data from author: ' $a
     echo 'url: ' ${authors[$a]}
-    python crawler.py --author=$a --author-page=${authors[$a]} --depth=2 --output=data/$a.pckl
+    python crawler.py --author=$a --author-page=${authors[$a]} --depth=2 --output=data/dblp_$a.pckl
     echo ''; echo '';
 done
 
