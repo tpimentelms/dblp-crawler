@@ -17,6 +17,12 @@ def parse_args():
     parser.add_argument('--depth', default=1,
                         help='Crawl depth.')
 
+    parser.add_argument('--author', default='',
+                        help='Author\'s name for log file. Default is empty string. (Only used when author-page!=None)')
+
+    parser.add_argument('--author-page', default=None,
+                        help='Use to get single ambiguous author. Author\'s disambiguation page. Default is None (use prolific page).')
+
     parser.add_argument('--output', default='dblp-data.pckl',
                         help='Output file.')
 
@@ -66,7 +72,6 @@ def parse_author_page(br, page, name, depth):
             coauthor_url = tag.a['href']
             coauthor_id = get_author_id_from_url(coauthor_url)
 
-            link = 'http://dblp.uni-trier.de/pers/hd/d/Ding:Zhiguo'
             coauthors[author_id].add(coauthor_id)
 
     done = set()
@@ -118,12 +123,22 @@ def crawl_page(br, link, depth):
     return result
 
 
-def get_prolific_links(depth):
+def get_initial_links(depth, author_page=None):
     global links_to_visit, links_visited
 
     if len(links_to_visit) or len(links_visited):
         return
     
+    if not author_page:
+        get_prolific_links(depth)
+    else:
+        print 'Starting crawl. Using author disambiguation page.'
+        author_link = mechanize._html.Link('la', author_page, 'Base Author', 'la','la')
+        links_to_visit = [(author_link, depth)]
+
+
+def get_prolific_links(depth):
+    global links_to_visit
     print 'Starting crawl. Getting all links for prolific pages'
 
     prolific_page = 'http://dblp.uni-trier.de/statistics/prolific%d'
@@ -134,19 +149,19 @@ def get_prolific_links(depth):
         links_to_visit += [(x, depth) for x in br.links(url_regex="search\/author\?q\=")]
 
 
-def crawl_links(depth):
+def crawl_links(depth, author_page=None):
     global completed, links_to_visit, links_visited
 
     print '\n-----------------------'
     print 'Starting crawl'
     print '-----------------------\n'
 
-    get_prolific_links(depth)
+    get_initial_links(depth, author_page)
 
     start_page = 'http://dblp.uni-trier.de/'
 
     br = mechanize.Browser()
-    br.open(start_page  )
+    br.open(start_page)
 
     util.start_print_progress(5, 'prolific links crawled', initial_count=len(links_visited))
 
@@ -181,17 +196,18 @@ def load_data(args):
             data = pickle.load(input)
         (coauthors, authors, ambiguous, completed, links_to_visit, links_visited) = data
 
-        print 'Loaded progress. Already completed:', completed
+        # print 'Loaded progress. Already completed:', completed
+        print 'Loaded progress.'
     except IOError:
         pass
 
 
-def run_crawler(depth):
+def run_crawler(args):
     crawl = True
     while(crawl):
         crawl = False
         try:
-            crawl_links(depth)
+            crawl_links(int(args.depth), args.author_page)
         except urllib2.HTTPError, err:
             if err.code == 429:
                 crawl = True
@@ -206,13 +222,17 @@ def run_crawler(depth):
 
 def main(args):
     if args.log:
-        file_logger.init('crawler__%s' % (str(time.time())))
+	if args.author_page:
+            file_logger.init('%s__crawler__%s' % (args.author, str(time.time())))
+        else:
+            file_logger.init('crawler__%s' % (str(time.time())))
 
     if not args.restart:
         load_data(args)
 
     try:
-        run_crawler(int(args.depth))
+        run_crawler(args)
+        print 'Completed without errors!!!\n'
     except Exception as e:
         print 'Error ocurred! Saving temp data'
         print e
